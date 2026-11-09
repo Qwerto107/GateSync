@@ -1,0 +1,10 @@
+.git
+.cache
+.env
+data
+bin
+web/node_modules
+web/dist
+internal/webui/dist
+*.log
+release-assets

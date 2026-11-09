@@ -1,0 +1,18 @@
+services:
+  gatesync:
+    image: ghcr.io/qwerto107/gatesync:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:13850:13850"
+    environment:
+      # 仅首次初始化使用，之后从后台修改密码；已有配置时可留空。
+      GATESYNC_ACCESS_PASSWORD: ${GATESYNC_ACCESS_PASSWORD:-}
+    volumes:
+      - ./data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp

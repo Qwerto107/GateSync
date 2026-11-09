@@ -1,0 +1,280 @@
+name: 构建、检查与发布
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+    paths:
+      [
+        "cmd/**",
+        "internal/**",
+        "go.mod",
+        "go.sum",
+        "web/**",
+        "scripts/**",
+        "compose.yaml",
+        ".github/**",
+        "Dockerfile",
+        ".dockerignore",
+        ".gitattributes",
+        "docs/binary.md",
+        "docs/releasing.md",
+      ]
+  pull_request:
+    paths:
+      [
+        "cmd/**",
+        "internal/**",
+        "go.mod",
+        "go.sum",
+        "web/**",
+        "scripts/**",
+        "compose.yaml",
+        ".github/**",
+        "Dockerfile",
+        ".dockerignore",
+        ".gitattributes",
+        "docs/binary.md",
+        "docs/releasing.md",
+      ]
+  workflow_dispatch:
+    inputs:
+      publish_images:
+        description: "检查通过后发布统一多架构镜像"
+        type: boolean
+        default: false
+      full_checks:
+        description: "运行现有 Go 用例的竞态检查及简单容器健康检查"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# 日常检查保留最新提交；版本发布及手动镜像发布不能中途取消。
+concurrency:
+  group: gatesync-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && !(github.event_name == 'workflow_dispatch' && inputs.publish_images) }}
+
+jobs:
+  go:
+    name: 后端检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: 校验版本、格式与静态问题
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]
+            [[ ${#GITHUB_REF_NAME} -le 100 ]]
+          fi
+          test -z "$(gofmt -l cmd internal)"
+          go vet ./...
+      - name: 后端单元测试
+        if: github.event_name != 'workflow_dispatch' || !inputs.full_checks
+        run: go test ./... -count=1 -timeout=300s
+      - name: 完整竞态检查
+        if: github.event_name == 'workflow_dispatch' && inputs.full_checks
+        run: go test -race ./... -count=1 -timeout=600s
+      - name: 可达依赖漏洞检查
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.full_checks)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  frontend:
+    name: 前端构建
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: 类型检查与前端构建
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: 准备内嵌页面
+        run: node scripts/prepare-webui.mjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: gatesync-webui-dist
+          path: internal/webui/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  binaries:
+    name: 二进制构建（${{ matrix.platform }}）
+    needs: [go, frontend]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-amd64, os: linux, arch: amd64, arm: "" }
+          - { platform: linux-arm64, os: linux, arch: arm64, arm: "" }
+          - { platform: linux-armv6, os: linux, arch: arm, arm: "6" }
+          - { platform: linux-armv5, os: linux, arch: arm, arm: "5" }
+          - { platform: linux-loong64, os: linux, arch: loong64, arm: "" }
+          - { platform: windows-amd64, os: windows, arch: amd64, arm: "" }
+          - { platform: darwin-arm64, os: darwin, arch: arm64, arm: "" }
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: gatesync-webui-dist
+          path: internal/webui/dist
+      - name: 构建、打包与生成校验文件
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          GOARM: ${{ matrix.arm }}
+          CGO_ENABLED: "0"
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: bash .github/scripts/package-binary.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: gatesync-binaries-${{ matrix.platform }}
+          path: |
+            bin/release/*.tar.gz*
+            bin/release/*.zip*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  docker:
+    name: 统一容器部署检查
+    needs: binaries
+    if: github.event_name == 'workflow_dispatch' && inputs.full_checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: gatesync-binaries-linux-amd64
+          path: .release/binaries/
+      - name: 构建并启动本次程序的统一容器
+        run: |
+          (cd .release/binaries && sha256sum -c ./*.sha256 && tar -xzf gatesync-linux-amd64.tar.gz)
+          docker build --target release -t gatesync:check .
+          docker run -d --name gatesync-check -p 127.0.0.1:13850:13850 -e GATESYNC_ACCESS_PASSWORD=CI-only-password-12345 gatesync:check
+      - name: 检查程序健康状态及首页
+        run: |
+          for attempt in {1..30}; do
+            if docker exec gatesync-check /gatesync healthcheck; then break; fi
+            if [[ "$attempt" == 30 ]]; then exit 1; fi
+            sleep 1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:13850/ > /dev/null
+      - name: 失败日志
+        if: failure()
+        run: docker logs gatesync-check
+      - name: 清理容器
+        if: always()
+        run: docker rm -f -v gatesync-check
+
+  images:
+    name: 发布统一镜像
+    needs: [go, frontend, binaries, docker]
+    if: >-
+      always() && needs.go.result == 'success' && needs.frontend.result == 'success' &&
+      needs.binaries.result == 'success' &&
+      (needs.docker.result == 'success' || needs.docker.result == 'skipped') &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish_images) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: gatesync-binaries-linux-*
+          merge-multiple: true
+          path: .release/binaries/
+      - name: 核对并提取已构建程序
+        run: |
+          cd .release/binaries
+          sha256sum -c ./*.sha256
+          for archive in gatesync-linux-*.tar.gz; do tar -xzf "$archive"; done
+      - name: 生成镜像标签
+        id: meta
+        run: bash .github/scripts/image-tags.sh
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 复用二进制发布五架构镜像
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: Dockerfile
+          target: release
+          platforms: linux/amd64,linux/arm64,linux/arm/v6,linux/arm/v5,linux/loong64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=GateSync
+          cache-from: type=gha,scope=gatesync
+          cache-to: type=gha,scope=gatesync,mode=max
+
+  release:
+    name: 发布版本二进制附件
+    needs: [binaries, images]
+    if: >-
+      always() && needs.binaries.result == 'success' && needs.images.result == 'success' &&
+      github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: gatesync-binaries-*
+          merge-multiple: true
+          path: release-assets/
+      - name: 上传、核对附件并公开 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: bash .github/scripts/publish-release.sh
