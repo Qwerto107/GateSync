@@ -174,12 +174,37 @@ func (a *App) syncScheduled(ctx context.Context) {
 	for _, t := range targets {
 		needsIP = needsIP || t.AutoSync && t.IPMode == "dynamic"
 	}
-	ip := ""
-	if needsIP {
-		ip, _ = a.ipForSync(ctx, "auto")
+	if !needsIP {
+		return
+	}
+	ip, e := a.ipForSync(ctx, "auto")
+	if e != nil || ip == "" {
+		return
 	}
 	for _, t := range targets {
-		if !t.AutoSync {
+		if !t.AutoSync || t.IPMode != "dynamic" {
+			continue
+		}
+		// 持久化每个目标已处理的出口，手动检测和服务重启不会重复触发同步。
+		key := "scheduled-ip:" + t.ID
+		previous := ""
+		if e := a.store.getMeta(key, &previous); e != nil {
+			if !errors.Is(e, sql.ErrNoRows) {
+				log.Printf("读取自动同步 IP 记录失败")
+				continue
+			}
+			previous = strings.TrimSuffix(t.CurrentCIDR, "/32")
+		}
+		if previous == ip {
+			continue
+		}
+		// 先记录本轮地址；同一 IP 的失败不在后续定时任务中重复核对云端。
+		if e := a.store.setMeta(key, ip); e != nil {
+			log.Printf("保存自动同步 IP 记录失败")
+			continue
+		}
+		if previous == "" {
+			// 尚无历史地址时只建立检测基线，等待实际 IP 变化。
 			continue
 		}
 		if _, e := a.syncTarget(ctx, t, ip, "auto", false); e != nil {
