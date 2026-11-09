@@ -789,6 +789,7 @@ nav {
 }
 .port-list {
   display: flex;
+  align-items: flex-start;
   gap: 5px;
   flex-wrap: wrap;
   max-width: 170px;
