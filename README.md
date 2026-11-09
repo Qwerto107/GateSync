@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/icon.svg" alt="GateSync 应用图标" width="96" height="96" />
+
 # GateSync
 
 可自托管的云安全组端口放行工具。定时检测公网 IP，自动更新 VPC 安全组或 Lighthouse 实例防火墙的入站规则。
