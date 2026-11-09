@@ -90,9 +90,9 @@ GET /state 及页面刷新只读取公网 IP 缓存，不发起外部查询。PO
 }
 ```
 
-detectOnManualSync 与 detectOnSchedule 可独立设置，分别控制显式手动同步及后台定时同步前是否查询公网 IP，缺省均为 true。关闭时使用最近一次成功且未被失败状态标记的缓存，不自动补查。全部同步每轮最多检测一次，仅有固定 IP 目标时不检测；定时查询仍受全局和目标自动同步开关控制。
+detectOnManualSync 与 detectOnSchedule 可独立设置，分别控制显式手动同步及后台定时同步前是否查询公网 IP，缺省均为 true。关闭时使用最近一次成功且未被失败状态标记的缓存，不自动补查。全部同步每轮最多检测一次，仅有固定 IP 目标时不检测；定时查询仍受全局和目标自动同步开关控制。定时任务仅在动态目标的公网 IP 变化时自动同步一次，地址未变或检测失败时不访问云端规则接口。每个目标的自动处理地址持久化；无历史地址时只建立基线，同一 IP 的同步失败须手动重试。纯固定 IP 目标不参与定时核对。
 
-interval 仅支持 1 / 5 / 15。cron 非空时优先使用五段表达式，按 timezone 指定的有效 IANA 时区执行，留空默认为 Asia/Shanghai。sources 为 1–3 个公开 HTTPS 地址，只允许 443 端口和纯文本 IPv4 响应。
+interval 支持 1–10080 分钟的整数，界面提供 1 / 5 / 10 / 15 / 30 / 60 分钟预设及自定义间隔。cron 非空时优先使用五段表达式，按 timezone 指定的有效 IANA 时区执行，留空默认为 Asia/Shanghai。sources 为 1–3 个公开 HTTPS 地址，只允许 443 端口和纯文本 IPv4 响应。
 
 系统设置读取返回 publicUrl、googleEnabled、googleClientId、hasGoogleSecret、googleAllowedEmails，不返回密码哈希或 Google Secret。保存示例：
 

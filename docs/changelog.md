@@ -2,6 +2,14 @@
 
 [文档中心](README.md) · [项目首页](../README.md) · [发布流程](releasing.md)
 
+## v0.1.1 · 2026-11-09
+
+- 检测频率增加 10、30、60 分钟预设，支持自定义 1–10080 分钟整数间隔，保留五段 Cron。
+
+- 定时任务仅在公网 IP 变化时自动同步一次，地址未变时不核对云端规则；检测失败保留旧规则，同一 IP 同步失败可手动重试。
+- 修复展开额外端口时，其他端口标签被拉高的问题。
+- README 顶部增加应用图标。
+
 ## v0.1.0 · 2026-11-09
 
 ### 功能
@@ -41,4 +49,4 @@
 - GitHub Actions 常规检查、七平台打包、五架构镜像和标签 Release。
 - full_checks 默认关闭，按需运行竞态与简单容器检查。
 
-尚未标记已发布版本；正式版本以 [Releases](https://github.com/Qwerto107/GateSync/releases) 为准。
+正式版本及附件以 [Releases](https://github.com/Qwerto107/GateSync/releases) 为准。
