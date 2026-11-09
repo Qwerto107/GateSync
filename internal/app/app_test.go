@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -251,8 +252,17 @@ func TestValidationAndCSV(t *testing.T) {
 			t.Fatal("接受了无效端口", p)
 		}
 	}
-	if _, e := (Settings{Interval: 3}).schedule(); e == nil {
-		t.Fatal("接受了无效间隔")
+	for _, interval := range []int{1, 3, 5, 10, 15, 30, 60, 10080} {
+		schedule, e := (Settings{Interval: interval}).schedule()
+		start := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
+		if e != nil || schedule.Next(start).Sub(start) != time.Duration(interval)*time.Minute {
+			t.Fatal("间隔调度错误", interval, e)
+		}
+	}
+	for _, interval := range []int{-1, 0, 10081} {
+		if _, e := (Settings{Interval: interval}).schedule(); e == nil {
+			t.Fatal("接受了无效间隔", interval)
+		}
 	}
 	if _, e := (Settings{Cron: "*/5 * * * *"}).schedule(); e != nil {
 		t.Fatal(e)

@@ -1133,6 +1133,15 @@ nav {
   color: var(--primary);
   box-shadow: 0 1px 4px #20284012;
 }
+.frequency-options {
+  display: flex;
+  flex-wrap: wrap;
+}
+.frequency-options button {
+  flex: 1 0 68px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
 .source-row {
   display: flex;
   gap: 9px;

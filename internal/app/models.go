@@ -252,8 +252,8 @@ func (s Settings) schedule() (cron.Schedule, error) {
 		}
 		return cron.ParseStandard("CRON_TZ=" + zone + " " + s.Cron)
 	}
-	if s.Interval != 1 && s.Interval != 5 && s.Interval != 15 {
-		return nil, fmt.Errorf("检查间隔仅支持 1、5、15 分钟")
+	if s.Interval < 1 || s.Interval > 10080 {
+		return nil, fmt.Errorf("检查间隔须为 1–10080 分钟的整数")
 	}
 	return cron.Every(time.Duration(s.Interval) * time.Minute), nil
 }

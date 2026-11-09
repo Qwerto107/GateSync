@@ -74,7 +74,7 @@ func (a *App) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, e := s.schedule(); e != nil {
-		fail(w, 400, "请输入有效时区和五段 Cron，或选择检查间隔")
+		fail(w, 400, "请输入有效时区和五段 Cron，或设置 1–10080 分钟的整数间隔")
 		return
 	}
 	if len(s.Sources) == 0 || len(s.Sources) > 3 {

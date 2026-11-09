@@ -12,6 +12,8 @@ import {
 import { api, date, Log, Settings, State } from "../api";
 import { Spin, Empty, Toggle, Select } from "../components/ui";
 
+const intervals = [1, 5, 10, 15, 30, 60];
+
 export default function Schedule({
   state,
   busy,
@@ -23,10 +25,14 @@ export default function Schedule({
 }) {
   const [form, setForm] = useState(state.settings);
   const [useCron, setUseCron] = useState(!!state.settings.cron);
+  const [customInterval, setCustomInterval] = useState(
+    !intervals.includes(state.settings.interval),
+  );
   const [records, setRecords] = useState<Log[]>([]);
   useEffect(() => {
     setForm(state.settings);
     setUseCron(!!state.settings.cron);
+    setCustomInterval(!intervals.includes(state.settings.interval));
   }, [JSON.stringify(state.settings)]);
   useEffect(() => {
     void api<{ items: Log[] }>("/logs?days=7")
@@ -45,7 +51,7 @@ export default function Schedule({
         <div>
           <div className="eyebrow muted">后台自动化</div>
           <h1>计划任务</h1>
-          <p>定时检查公网 IP，让授权规则持续保持一致。</p>
+          <p>定时检测公网 IP，仅在地址变化时同步云端规则。</p>
         </div>
         <span
           className={`badge ${state.settings.enabled ? "good" : "neutral"}`}
@@ -72,7 +78,7 @@ export default function Schedule({
             </span>
             <div>
               <h2>自动同步</h2>
-              <p>应用运行期间，按计划检查并同步</p>
+              <p>按计划检测公网 IP，变化时同步一次</p>
             </div>
             <Toggle
               checked={form.enabled}
@@ -105,14 +111,19 @@ export default function Schedule({
           </div>
           <div className="settings-section">
             <label className="field-label">检查频率</label>
-            <div className="segmented">
-              {[1, 5, 15].map((n) => (
+            <div className="segmented frequency-options">
+              {intervals.map((n) => (
                 <button
                   type="button"
                   key={n}
-                  className={!useCron && form.interval === n ? "selected" : ""}
+                  className={
+                    !useCron && !customInterval && form.interval === n
+                      ? "selected"
+                      : ""
+                  }
                   onClick={() => {
                     setUseCron(false);
+                    setCustomInterval(false);
                     setForm({ ...form, interval: n });
                   }}
                 >
@@ -121,12 +132,41 @@ export default function Schedule({
               ))}
               <button
                 type="button"
+                className={!useCron && customInterval ? "selected" : ""}
+                onClick={() => {
+                  setUseCron(false);
+                  setCustomInterval(true);
+                }}
+              >
+                自定义
+              </button>
+              <button
+                type="button"
                 className={useCron ? "selected" : ""}
                 onClick={() => setUseCron(true)}
               >
                 Cron
               </button>
             </div>
+            {!useCron && customInterval && (
+              <label className="field cron-field">
+                自定义间隔（分钟）
+                <input
+                  type="number"
+                  min={1}
+                  max={10080}
+                  step={1}
+                  required
+                  value={form.interval || ""}
+                  onChange={(e) =>
+                    setForm({ ...form, interval: Number(e.target.value) })
+                  }
+                />
+                <span className="field-hint">
+                  支持 1–10080 分钟的整数（最长 7 天）。
+                </span>
+              </label>
+            )}
             {useCron && (
               <label className="field cron-field">
                 <input
@@ -238,10 +278,12 @@ export default function Schedule({
             </div>
             <div className="strategy">
               <CheckCircle2 size={16} />
-              <span>每次检查均核对规则，失败目标后续重试</span>
+              <span>公网 IP 未变时不读取云端规则，变化时同步一次</span>
             </div>
             <p className="field-hint">
-              仅同步已开启“自动同步”的目标；固定网段目标也会检查规则。
+              仅处理已开启“自动同步”且跟随公网 IP
+              的目标。检测失败保留旧规则；同步失败可手动重试，纯固定 IP
+              目标不参与定时核对。
             </p>
           </div>
           <div className="settings-bottom">
