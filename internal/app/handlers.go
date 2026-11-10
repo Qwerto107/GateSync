@@ -487,11 +487,22 @@ type logFilter struct {
 	args  []any
 }
 
-func filters(r *http.Request) logFilter {
+func filters(r *http.Request) (logFilter, error) {
 	f := logFilter{where: " WHERE 1=1"}
 	q := r.URL.Query()
 	for _, field := range []string{"kind", "trigger"} {
-		if v := q.Get(field); v != "" {
+		if values := q[field]; len(values) > 0 {
+			if field == "kind" && len(values) > 1 {
+				f.where += " AND kind IN (?" + strings.Repeat(",?", len(values)-1) + ")"
+				for _, v := range values {
+					f.args = append(f.args, v)
+				}
+				continue
+			}
+			v := values[0]
+			if v == "" {
+				continue
+			}
 			f.where += " AND " + field + "=?"
 			f.args = append(f.args, v)
 		}
@@ -504,13 +515,31 @@ func filters(r *http.Request) logFilter {
 		f.where += " AND (object LIKE ? OR detail LIKE ?)"
 		f.args = append(f.args, "%"+v+"%", "%"+v+"%")
 	}
-	days, _ := strconv.Atoi(q.Get("days"))
-	if days != 7 && days != 30 && days != 90 {
-		days = 7
+	if q.Has("from") || q.Has("to") {
+		from, e1 := time.Parse(time.RFC3339Nano, q.Get("from"))
+		to, e2 := time.Parse(time.RFC3339Nano, q.Get("to"))
+		if e1 != nil || e2 != nil || !from.Before(to) {
+			return f, fmt.Errorf("请选择有效的起止时间，结束时间须晚于开始时间")
+		}
+		// 日志按整秒保存；边界向上取整，保留毫秒输入的左闭右开语义。
+		boundary := func(t time.Time) string {
+			if t.Nanosecond() != 0 {
+				t = t.Truncate(time.Second).Add(time.Second)
+			}
+			return t.UTC().Format(time.RFC3339)
+		}
+		f.where += " AND time>=? AND time<?"
+		f.args = append(f.args, boundary(from), boundary(to))
+	} else {
+		// 保留旧客户端的 days 参数，页面使用明确的起止时间。
+		days, _ := strconv.Atoi(q.Get("days"))
+		if days != 7 && days != 30 && days != 90 {
+			days = 7
+		}
+		f.where += " AND time>=?"
+		f.args = append(f.args, time.Now().AddDate(0, 0, -days).UTC().Format(time.RFC3339))
 	}
-	f.where += " AND time>=?"
-	f.args = append(f.args, time.Now().AddDate(0, 0, -days).UTC().Format(time.RFC3339))
-	return f
+	return f, nil
 }
 func readLogs(rows *sql.Rows) ([]LogEntry, error) {
 	defer rows.Close()
@@ -529,13 +558,31 @@ func readLogs(rows *sql.Rows) ([]LogEntry, error) {
 	return out, rows.Err()
 }
 func (a *App) logs(w http.ResponseWriter, r *http.Request) {
-	f := filters(r)
+	f, filterErr := filters(r)
+	if filterErr != nil {
+		fail(w, 400, filterErr.Error())
+		return
+	}
+	if r.URL.Query().Has("firstId") || r.URL.Query().Has("lastId") {
+		first, e1 := strconv.ParseInt(r.URL.Query().Get("firstId"), 10, 64)
+		last, e2 := strconv.ParseInt(r.URL.Query().Get("lastId"), 10, 64)
+		if e1 != nil || e2 != nil || first < 1 || last < first {
+			fail(w, 400, "日志明细范围无效")
+			return
+		}
+		f.where += " AND id BETWEEN ? AND ?"
+		f.args = append(f.args, first, last)
+	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
 	}
 	if page > 100000 {
 		page = 100000
+	}
+	if r.URL.Query().Get("group") == "true" {
+		a.groupedLogs(w, r, f, page)
+		return
 	}
 	var total int
 	if e := a.store.db.QueryRow("SELECT count(*) FROM logs"+f.where, f.args...).Scan(&total); e != nil {
@@ -563,7 +610,11 @@ func csvSafe(s string) string {
 	return s
 }
 func (a *App) exportLogs(w http.ResponseWriter, r *http.Request) {
-	f := filters(r)
+	f, filterErr := filters(r)
+	if filterErr != nil {
+		fail(w, 400, filterErr.Error())
+		return
+	}
 	rows, e := a.store.db.Query("SELECT id,time,kind,trigger,object,detail,success,changes FROM logs"+f.where+" ORDER BY id DESC LIMIT 10000", f.args...)
 	if e != nil {
 		fail(w, 500, "导出失败")

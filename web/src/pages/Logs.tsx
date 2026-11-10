@@ -12,34 +12,43 @@ import {
 } from "lucide-react";
 import { api, date, kinds, Log } from "../api";
 import { Spin, Empty, Select } from "../components/ui";
+import LogGroupDetails from "../components/LogGroupDetails";
+import LogTimeRangePicker from "../components/LogTimeRangePicker";
+import { recentLogRange } from "../components/logTimeRange";
 
 export default function Logs() {
   const [filter, setFilter] = useState({
-    days: "7",
     kind: "",
     result: "",
     q: "",
   });
+  const [range, setRange] = useState(() => recentLogRange());
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<Log[]>([]);
   const [total, setTotal] = useState(0);
+  const [rawTotal, setRawTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [refresh, setRefresh] = useState(0);
   const params = new URLSearchParams({
     ...filter,
+    from: range.from,
+    to: range.to,
     page: String(page),
   }).toString();
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const timer = setTimeout(() => {
-      void api<{ items: Log[]; total: number }>(`/logs?${params}`)
+      void api<{ items: Log[]; total: number; rawTotal: number }>(
+        `/logs?${params}&group=true`,
+      )
         .then((v) => {
           if (!cancelled) {
             setItems(v.items);
             setTotal(v.total);
+            setRawTotal(v.rawTotal);
             setError("");
           }
         })
@@ -73,18 +82,17 @@ export default function Logs() {
         </a>
       </div>
       <section className="card data-card">
+        <div className="log-time-toolbar">
+          <LogTimeRangePicker
+            value={range}
+            onChange={(value) => {
+              setRange(value);
+              setPage(1);
+            }}
+          />
+        </div>
         <div className="card-toolbar log-toolbar">
           <div className="inline">
-            <Select
-              label="日志时间范围"
-              value={filter.days}
-              onChange={(v) => update("days", v)}
-              options={[
-                { value: "7", label: "最近 7 天" },
-                { value: "30", label: "最近 30 天" },
-                { value: "90", label: "最近 90 天" },
-              ]}
-            />
             <Select
               label="日志类型"
               value={filter.kind}
@@ -120,7 +128,13 @@ export default function Logs() {
             </div>
             <button
               className="icon-btn"
-              onClick={() => setRefresh((v) => v + 1)}
+              onClick={() => {
+                if (range.hours) {
+                  setRange(recentLogRange(range.hours));
+                  setPage(1);
+                }
+                setRefresh((v) => v + 1);
+              }}
               aria-label="刷新日志"
             >
               {loading ? <Spin /> : <RefreshCw size={16} />}
@@ -152,8 +166,9 @@ export default function Logs() {
               <tbody>
                 {items.map((l) => (
                   <LogRow
-                    key={l.id}
+                    key={`${l.id}:${params}`}
                     item={l}
+                    filters={params}
                     expanded={expanded === l.id}
                     onExpand={() =>
                       setExpanded(expanded === l.id ? null : l.id)
@@ -171,7 +186,10 @@ export default function Logs() {
           />
         )}
         <div className="table-footer">
-          <span>共 {total} 条，每页 20 条 · 导出最多 10,000 条</span>
+          <span>
+            共 {rawTotal} 条记录，折叠后 {total} 项，每页 20 项 · 导出最多
+            10,000 条
+          </span>
           <div className="pagination">
             <button
               className="icon-btn"
@@ -200,15 +218,26 @@ function LogRow({
   item: l,
   expanded,
   onExpand,
+  filters,
 }: {
   item: Log;
   expanded: boolean;
   onExpand: () => void;
+  filters: string;
 }) {
   return (
     <>
       <tr>
-        <td className="nowrap muted">{date(l.time)}</td>
+        <td className="nowrap muted">
+          {(l.count || 0) > 1 ? (
+            <>
+              {date(l.firstTime)}
+              <br />至 {date(l.time)}
+            </>
+          ) : (
+            date(l.time)
+          )}
+        </td>
         <td>{kinds[l.kind] || l.kind}</td>
         <td>
           <span className={`trigger-tag ${l.trigger === "auto" ? "auto" : ""}`}>
@@ -218,6 +247,7 @@ function LogRow({
         <td className="log-object">{l.object}</td>
         <td className="log-detail">
           <span className={!l.success ? "error-text" : ""}>{l.detail}</span>
+          {(l.count || 0) > 1 && <LogGroupDetails item={l} filters={filters} />}
           {l.changes.length > 0 && (
             <button className="text-btn change-button" onClick={onExpand}>
               {expanded ? "收起变更" : `${l.changes.length} 条变更`}

@@ -71,6 +71,8 @@ curl --fail --cookie session.txt http://localhost:13850/api/state
 | PUT /settings | 保存全局自动同步设置 |
 | GET /system | 读取脱敏系统设置 |
 | PUT /system | 保存系统及登录设置，并撤销全部会话 |
+| GET /log-settings | 读取日志保留天数 |
+| PUT /log-settings | 独立保存日志保留天数，不撤销会话 |
 
 IP 状态包含 `ip`、`source`、`checkedAt`、`error`。nextCheck 为 RFC 3339 时间，任务关闭时为空。页面状态是本地记录及当前 IP 的比较结果，实时云端核验在同步时执行。
 
@@ -212,10 +214,23 @@ note 写入云端可读备注，附加稳定归属后缀。修改 note 时原地
 | 参数 | 可选值 |
 | --- | --- |
 | days | 7 / 30 / 90，默认 7 |
+| from、to | 成对传入带时区的 RFC 3339 起止时间，优先于 days |
 | kind | ip / sync / account / target / settings / login |
 | trigger | manual / auto |
 | result | success / failed |
 | q | 对象或详情搜索 |
 | page | 从 1 开始，仅日志列表使用 |
 
+kind 可重复传入，例如 `kind=ip&kind=sync`，用于查询计划任务执行记录。
+
+时间范围为左闭右开：包含 from，不包含 to，结束时间须晚于开始时间。接口接受时区偏移并统一按 UTC 比较；无效、缺失或倒置的范围返回 400。页面按浏览器本地时区选择，默认最近 12 小时，提供 12h / 1d / 3d / 7d 快选，列表、展开明细及 CSV 使用相同范围。刷新快选范围时重新计算当前时间；自定义范围保持固定。未传起止时间时兼容旧 days 参数。
+
+GET /logs 可传 `group=true`。接口将连续、相同 IP、相同触发方式的成功“公网 IP 无变化”记录聚合后分页，每页 20 项。其他操作、失败、IP 变化及包含规则变更的记录均打断分组，筛选不会跨过这些边界合并记录。total 为聚合后的项数，rawTotal 为符合条件的原始记录数。
+
+聚合项额外包含 count、firstId、firstTime，id 和 time 对应组内最新记录。展开时传入 `firstId` 和 `lastId`（聚合项的 id），使用普通 GET /logs 分页读取该范围的原始记录。两个 ID 须为正整数，且 firstId 不大于 lastId；范围及现有筛选条件同时生效。省略 group 时保留原列表返回方式，CSV 始终逐条导出。
+
 日志项包含 id、time、kind、trigger、object、detail、success、changes。changes 为规则变更文本数组。时间使用 RFC 3339 UTC，CSV 导出应用相同筛选并转义潜在公式文本。
+
+日志保留设置的读取及保存格式为 `{"retentionDays":180}`。retentionDays 为必填整数，范围 0–36500，0 表示永久保留。新安装默认 180 天，已有安装升级时默认 0；已保存的设置在重启后保留，不受环境变量覆盖。
+
+后台每 24 小时清理一次，删除所有类型中早于保留截止时间的记录，边界当天对应时刻及之后的记录保留。清理不依赖自动同步开关，服务停止期间不执行；启动时补做已到期的任务，并持久化完成时间以避免重启重复清理。保存设置不会立即删除日志；清理失败一小时后重试。设置保存无需重新登录。0 只停止后续清理，无法恢复已删除的日志。

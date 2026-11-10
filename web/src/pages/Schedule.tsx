@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { api, date, Log, Settings, State } from "../api";
 import { Spin, Empty, Toggle, Select } from "../components/ui";
+import LogGroupDetails from "../components/LogGroupDetails";
 
 const intervals = [1, 5, 10, 15, 30, 60];
 
@@ -35,14 +36,8 @@ export default function Schedule({
     setCustomInterval(!intervals.includes(state.settings.interval));
   }, [JSON.stringify(state.settings)]);
   useEffect(() => {
-    void api<{ items: Log[] }>("/logs?days=7")
-      .then((v) =>
-        setRecords(
-          v.items
-            .filter((l) => l.kind === "ip" || l.kind === "sync")
-            .slice(0, 6),
-        ),
-      )
+    void api<{ items: Log[] }>("/logs?days=7&kind=ip&kind=sync&group=true")
+      .then((v) => setRecords(v.items.slice(0, 6)))
       .catch(() => {});
   }, [state.ip.checkedAt, state.settings.enabled]);
   return (
@@ -318,9 +313,14 @@ export default function Schedule({
                   <span
                     className={`timeline-dot ${l.success ? "" : "failed"}`}
                   />
-                  <small>{date(l.time)}</small>
+                  <small>
+                    {(l.count || 0) > 1
+                      ? `${date(l.firstTime)} 至 ${date(l.time)}`
+                      : date(l.time)}
+                  </small>
                   <strong>{l.kind === "ip" ? "公网 IP 检查" : l.object}</strong>
                   <p className={!l.success ? "error-text" : ""}>{l.detail}</p>
+                  {(l.count || 0) > 1 && <LogGroupDetails item={l} />}
                 </div>
               ))}
             </div>

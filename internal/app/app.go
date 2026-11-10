@@ -78,7 +78,9 @@ func New(c Config) (*App, error) {
 		s.db.Close()
 		return nil, e
 	}
+	newInstallation := false
 	if e = s.getMeta("installation", &a.installation); errors.Is(e, sql.ErrNoRows) {
+		newInstallation = true
 		a.installation = randomID()[:16]
 		e = s.setMeta("installation", a.installation)
 	}
@@ -100,6 +102,10 @@ func New(c Config) (*App, error) {
 		e = s.setMeta("settings", settings)
 	}
 	if e != nil {
+		s.db.Close()
+		return nil, e
+	}
+	if e = a.initLogSettings(newInstallation); e != nil {
 		s.db.Close()
 		return nil, e
 	}
@@ -137,6 +143,7 @@ func (a *App) RunScheduler(ctx context.Context) {
 		a.nextMu.Unlock()
 	}
 	setNext()
+	nextCleanup := time.Now()
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	for {
@@ -146,6 +153,14 @@ func (a *App) RunScheduler(ctx context.Context) {
 		case <-a.wake:
 			setNext()
 		case <-tick.C:
+			if !time.Now().Before(nextCleanup) {
+				var err error
+				nextCleanup, err = a.cleanupLogs(ctx, time.Now())
+				if err != nil {
+					log.Printf("日志清理未完成，将在一小时后重试")
+					nextCleanup = time.Now().Add(time.Hour)
+				}
+			}
 			a.nextMu.Lock()
 			due := !a.next.IsZero() && !time.Now().Before(a.next)
 			a.nextMu.Unlock()
@@ -247,6 +262,8 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("POST /api/auth/logout", a.auth(http.HandlerFunc(a.logout)))
 	mux.Handle("GET /api/system", a.auth(http.HandlerFunc(a.getSystem)))
 	mux.Handle("PUT /api/system", a.auth(http.HandlerFunc(a.updateSystem)))
+	mux.Handle("GET /api/log-settings", a.auth(http.HandlerFunc(a.getLogSettings)))
+	mux.Handle("PUT /api/log-settings", a.auth(http.HandlerFunc(a.updateLogSettings)))
 	mux.Handle("GET /api/accounts/{id}/regions", a.auth(http.HandlerFunc(a.regions)))
 	mux.Handle("POST /api/accounts/regions", a.auth(http.HandlerFunc(a.formRegions)))
 	mux.Handle("GET /api/state", a.auth(http.HandlerFunc(a.state)))

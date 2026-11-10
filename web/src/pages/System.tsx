@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { Spin, Toggle } from "../components/ui";
+import LogRetentionSettings from "../components/LogRetentionSettings";
 
 interface SystemConfig {
   publicUrl: string;
@@ -266,6 +267,7 @@ export default function System({ onSaved }: { onSaved: () => Promise<void> }) {
           </div>
         </form>
       )}
+      <LogRetentionSettings />
     </>
   );
 }

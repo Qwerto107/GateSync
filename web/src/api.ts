@@ -63,6 +63,9 @@ export interface Log {
   detail: string;
   success: boolean;
   changes: string[];
+  count?: number;
+  firstId?: number;
+  firstTime?: string;
 }
 export class ApiError extends Error {
   constructor(
