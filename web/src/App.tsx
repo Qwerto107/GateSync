@@ -371,7 +371,7 @@ export default function App() {
           </span>
           <span>
             GateSync <span className="footer-dot">·</span> 腾讯云{" "}
-            <span className="version">v0.1.1</span>
+            <span className="version">v0.1.2</span>
           </span>
         </footer>
       </main>
