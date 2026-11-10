@@ -65,9 +65,11 @@ export function Select({
       const above = rect.top - 12;
       const height = Math.min(260, Math.max(below, above));
       const upwards = below < 180 && above > below;
+      // 窄控件的菜单需为文字、勾选图标和滚动条留出空间，同时避开视口边缘。
+      const width = Math.min(Math.max(rect.width, 144), window.innerWidth - 24);
       setPosition({
-        left: rect.left,
-        width: rect.width,
+        left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)),
+        width,
         top: upwards ? rect.top - 6 : rect.bottom + 6,
         maxHeight: height,
       });

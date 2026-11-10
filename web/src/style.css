@@ -2683,6 +2683,10 @@ nav {
   background: var(--primary-soft);
   color: var(--primary);
 }
+.select-option > span {
+  flex: 1;
+  min-width: 0;
+}
 .select-empty {
   padding: 12px 10px;
   color: var(--muted);
