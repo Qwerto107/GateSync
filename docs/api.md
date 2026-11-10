@@ -2,7 +2,7 @@
 
 [文档中心](README.md) · [使用指南](usage.md) · [开发指南](development.md)
 
-[约定](#请求约定) · [登录](#登录与会话) · [状态](#状态与设置) · [账号](#云账号) · [目标](#放行目标) · [日志](#操作日志)
+[约定](#请求约定) · [登录](#登录与会话) · [状态](#状态与设置) · [账号](#云账号) · [目标](#放行目标) · [日志](#操作日志) · [通知](#通知渠道)
 
 ## 请求约定
 
@@ -215,7 +215,7 @@ note 写入云端可读备注，附加稳定归属后缀。修改 note 时原地
 | --- | --- |
 | days | 7 / 30 / 90，默认 7 |
 | from、to | 成对传入带时区的 RFC 3339 起止时间，优先于 days |
-| kind | ip / sync / account / target / settings / login |
+| kind | ip / sync / account / target / settings / login / notification |
 | trigger | manual / auto |
 | result | success / failed |
 | q | 对象或详情搜索 |
@@ -234,3 +234,37 @@ GET /logs 可传 `group=true`。接口将连续、相同 IP、相同触发方式
 日志保留设置的读取及保存格式为 `{"retentionDays":180}`。retentionDays 为必填整数，范围 0–36500，0 表示永久保留。新安装默认 180 天，已有安装升级时默认 0；已保存的设置在重启后保留，不受环境变量覆盖。
 
 后台每 24 小时清理一次，删除所有类型中早于保留截止时间的记录，边界当天对应时刻及之后的记录保留。清理不依赖自动同步开关，服务停止期间不执行；启动时补做已到期的任务，并持久化完成时间以避免重启重复清理。保存设置不会立即删除日志；清理失败一小时后重试。设置保存无需重新登录。0 只停止后续清理，无法恢复已删除的日志。
+
+## 通知渠道
+
+| 方法与路径 | 用途 |
+| --- | --- |
+| GET /notification-channels | 返回 items、events、defaultTemplates、variables |
+| POST /notification-channels | 新建渠道 |
+| PUT /notification-channels/{id} | 更新渠道，包括 enabled 启停状态 |
+| DELETE /notification-channels/{id} | 删除渠道及待发送任务，保留历史日志 |
+| POST /notification-channels/preview | 使用示例数据渲染卡片，不访问飞书 |
+| POST /notification-channels/test | 实际发送一张测试卡片，不保存表单，不自动重试 |
+
+保存请求示例：
+
+```json
+{
+  "name": "办公室飞书群",
+  "type": "feishu",
+  "enabled": true,
+  "events": ["ip_changed", "sync_succeeded", "sync_failed"],
+  "templates": {},
+  "webhook": "你的飞书机器人 Webhook",
+  "signSecret": "",
+  "clearSignSecret": false
+}
+```
+
+当前仅支持 type=feishu，最多 20 个渠道。events 支持 ip_changed、sync_succeeded、sync_failed，启用时至少选一项。sync_succeeded 仅在实际修改规则且同步成功时产生；规则无需修改不通知。一轮同步按渠道订阅合并为一个任务。
+
+templates 支持 ip_changed、sync_succeeded、sync_failed 及 sync_summary（合并同步结果），值为卡片 JSON 2.0 字符串，缺省或空字符串使用默认卡片；每个模板最多 16 KiB。读取渠道列表同时返回 templateNames（模板名称映射），与 events（可订阅事件）分开；sync_summary 仅为模板类型，不是可订阅事件。合并卡片提供 success_count、failure_count、summary 和 ip_summary 等变量，按渠道订阅生成。地址仅允许飞书官方 HTTPS 机器人接口，不接受跳转、查询参数或其他主机。
+
+更新时 webhook、signSecret 留空保留原值；clearSignSecret=true 明确清除旧签名密钥，此时不得再传非空 signSecret。读取与保存响应包含 id、name、type、enabled、events、templates、hasWebhook、hasSignSecret，不返回 Webhook 或签名密钥。保存不触发消息或撤销会话。
+
+测试接口接收保存表单的字段，另传 event 指定测试类型。可传 id 复用已有渠道未修改的凭证；实际发送一次，成功返回 message，飞书失败返回脱敏 502。预览只需 `{"event":"ip_changed","templates":{}}`，返回 `{"card":{...}}`；模板变量与通知触发、重试约定见 [通知渠道](notifications.md)。这些接口均要求登录，写入接口沿用请求来源校验。

@@ -9,6 +9,7 @@ import {
   ListFilter,
   LogOut,
   Moon,
+  Bell,
   ShieldCheck,
   Settings2,
   Sun,
@@ -25,11 +26,18 @@ import Accounts from "./pages/Accounts";
 import Schedule from "./pages/Schedule";
 import Logs from "./pages/Logs";
 import System from "./pages/System";
+import Notifications from "./pages/Notifications";
 import AccountModal from "./components/AccountModal";
 import TargetModal from "./components/TargetModal";
 import DeleteModal from "./components/DeleteModal";
 
-type Tab = "rules" | "schedule" | "accounts" | "logs" | "system";
+type Tab =
+  | "rules"
+  | "schedule"
+  | "accounts"
+  | "logs"
+  | "system"
+  | "notifications";
 type Toast = { text: string; tone: "success" | "error" | "info" };
 type Run = (key: string, action: () => Promise<void>) => Promise<void>;
 const tabs: { id: Tab; title: string; icon: typeof Layers3 }[] = [
@@ -37,6 +45,7 @@ const tabs: { id: Tab; title: string; icon: typeof Layers3 }[] = [
   { id: "schedule", title: "计划任务", icon: Clock3 },
   { id: "accounts", title: "云账号", icon: Cloud },
   { id: "logs", title: "操作日志", icon: ListFilter },
+  { id: "notifications", title: "通知渠道", icon: Bell },
   { id: "system", title: "系统设置", icon: Settings2 },
 ];
 export default function App() {
@@ -346,6 +355,7 @@ export default function App() {
           />
         )}
         {tab === "logs" && <Logs />}
+        {tab === "notifications" && <Notifications />}
         {tab === "system" && (
           <System
             onSaved={async () => {

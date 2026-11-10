@@ -48,24 +48,25 @@ type oauthAttempt struct {
 	Expires                time.Time
 }
 type App struct {
-	cfg          Config
-	systemMu     sync.RWMutex
-	system       SystemSettings
-	authMu       sync.RWMutex
-	lighthouse   func(Credentials, string) (Cloud, error)
-	store        *Store
-	installation string
-	cloud        func(Credentials, string) (Cloud, error)
-	mutate       sync.Mutex
-	detectMu     sync.Mutex
-	oauthMu      sync.Mutex
-	attempts     map[string]oauthAttempt
-	loginSlots   chan struct{}
-	rateMu       sync.Mutex
-	loginRates   map[string][]time.Time
-	nextMu       sync.Mutex
-	next         time.Time
-	wake         chan struct{}
+	cfg                 Config
+	systemMu            sync.RWMutex
+	system              SystemSettings
+	authMu              sync.RWMutex
+	lighthouse          func(Credentials, string) (Cloud, error)
+	store               *Store
+	installation        string
+	cloud               func(Credentials, string) (Cloud, error)
+	mutate              sync.Mutex
+	detectMu            sync.Mutex
+	oauthMu             sync.Mutex
+	attempts            map[string]oauthAttempt
+	loginSlots          chan struct{}
+	rateMu              sync.Mutex
+	loginRates          map[string][]time.Time
+	nextMu              sync.Mutex
+	next                time.Time
+	wake                chan struct{}
+	notificationSenders map[string]notificationSender
 }
 
 func New(c Config) (*App, error) {
@@ -74,6 +75,7 @@ func New(c Config) (*App, error) {
 		return nil, e
 	}
 	a := &App{cfg: c, store: s, cloud: newTencent, lighthouse: newLighthouse, attempts: map[string]oauthAttempt{}, loginSlots: make(chan struct{}, 4), loginRates: map[string][]time.Time{}, wake: make(chan struct{}, 1)}
+	a.notificationSenders = map[string]notificationSender{"feishu": feishuSender{}}
 	if e = a.initSystem(c); e != nil {
 		s.db.Close()
 		return nil, e
@@ -129,6 +131,12 @@ func (a *App) settings() (Settings, error) {
 	return s, e
 }
 func (a *App) RunScheduler(ctx context.Context) {
+	notificationsDone := make(chan struct{})
+	go func() {
+		defer close(notificationsDone)
+		a.runNotifications(ctx)
+	}()
+	defer func() { <-notificationsDone }()
 	setNext := func() {
 		s, e := a.settings()
 		var next time.Time
@@ -180,6 +188,8 @@ func (a *App) RunScheduler(ctx context.Context) {
 	}
 }
 func (a *App) syncScheduled(ctx context.Context) {
+	ctx, finishNotifications := a.beginNotificationRound(ctx)
+	defer finishNotifications()
 	targets, e := a.store.targets()
 	if e != nil {
 		log.Printf("读取自动同步目标失败")
@@ -264,6 +274,12 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("PUT /api/system", a.auth(http.HandlerFunc(a.updateSystem)))
 	mux.Handle("GET /api/log-settings", a.auth(http.HandlerFunc(a.getLogSettings)))
 	mux.Handle("PUT /api/log-settings", a.auth(http.HandlerFunc(a.updateLogSettings)))
+	mux.Handle("GET /api/notification-channels", a.auth(http.HandlerFunc(a.listNotificationChannels)))
+	mux.Handle("POST /api/notification-channels", a.auth(http.HandlerFunc(a.saveNotificationChannel)))
+	mux.Handle("PUT /api/notification-channels/{id}", a.auth(http.HandlerFunc(a.saveNotificationChannel)))
+	mux.Handle("DELETE /api/notification-channels/{id}", a.auth(http.HandlerFunc(a.deleteNotificationChannel)))
+	mux.Handle("POST /api/notification-channels/test", a.auth(http.HandlerFunc(a.testNotificationChannel)))
+	mux.Handle("POST /api/notification-channels/preview", a.auth(http.HandlerFunc(a.previewNotification)))
 	mux.Handle("GET /api/accounts/{id}/regions", a.auth(http.HandlerFunc(a.regions)))
 	mux.Handle("POST /api/accounts/regions", a.auth(http.HandlerFunc(a.formRegions)))
 	mux.Handle("GET /api/state", a.auth(http.HandlerFunc(a.state)))

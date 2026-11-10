@@ -8,6 +8,7 @@
 | --- | --- |
 | 添加云账号、配置端口、同步公网 IP | [使用指南](usage.md) |
 | 设置自动检查、查看同步记录 | [计划任务](usage.md#计划任务) · [操作日志](usage.md#操作日志) |
+| 配置飞书机器人与自定义卡片模板 | [通知渠道](notifications.md) |
 | 通过脚本调用接口 | [API 参考](api.md) |
 | 复制安全组或 Lighthouse 的 CAM 策略 | [CAM 授权](cam.md) |
 | 查看版本变化 | [更新记录](changelog.md) |

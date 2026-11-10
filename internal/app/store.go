@@ -73,6 +73,9 @@ func openStore(dir, keyEnv string) (*Store, error) {
  CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, time TEXT NOT NULL, kind TEXT NOT NULL, trigger TEXT NOT NULL, object TEXT NOT NULL, detail TEXT NOT NULL, success INTEGER NOT NULL, changes TEXT NOT NULL);
  CREATE INDEX IF NOT EXISTS logs_time ON logs(time);
  CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, identity TEXT NOT NULL, expires INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS notification_channels (id TEXT PRIMARY KEY, data BLOB NOT NULL);
+ CREATE TABLE IF NOT EXISTS notification_jobs (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL REFERENCES notification_channels(id) ON DELETE CASCADE, event TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_attempt INTEGER NOT NULL);
+ CREATE INDEX IF NOT EXISTS notification_jobs_due ON notification_jobs(next_attempt);
  DELETE FROM sessions; PRAGMA user_version=1;`)
 	if err != nil {
 		db.Close()

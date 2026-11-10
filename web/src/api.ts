@@ -99,6 +99,23 @@ export interface Region {
   id: string;
   name: string;
 }
+export interface NotificationChannel {
+  id: string;
+  name: string;
+  type: string;
+  enabled: boolean;
+  events: string[];
+  templates: Record<string, string>;
+  hasWebhook: boolean;
+  hasSignSecret: boolean;
+}
+export interface NotificationChannels {
+  items: NotificationChannel[];
+  events: Record<string, string>;
+  templateNames: Record<string, string>;
+  defaultTemplates: Record<string, string>;
+  variables: string[];
+}
 export const kinds: Record<string, string> = {
   ip: "IP 检测",
   sync: "规则同步",
@@ -106,6 +123,7 @@ export const kinds: Record<string, string> = {
   target: "目标变更",
   settings: "计划设置",
   login: "登录",
+  notification: "通知发送",
 };
 export function date(value?: string): string {
   if (!value) return "尚未执行";

@@ -352,6 +352,8 @@ func (a *App) saveTarget(w http.ResponseWriter, r *http.Request) {
 func (a *App) syncOne(w http.ResponseWriter, r *http.Request) {
 	a.mutate.Lock()
 	defer a.mutate.Unlock()
+	ctx, finishNotifications := a.beginNotificationRound(r.Context())
+	defer finishNotifications()
 	t, e := a.store.target(r.PathValue("id"))
 	if e != nil {
 		fail(w, 404, "放行目标不存在")
@@ -359,9 +361,9 @@ func (a *App) syncOne(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := ""
 	if t.IPMode == "dynamic" {
-		ip, _ = a.ipForSync(r.Context(), "manual")
+		ip, _ = a.ipForSync(ctx, "manual")
 	}
-	t, e = a.syncTarget(r.Context(), t, ip, "manual", false)
+	t, e = a.syncTarget(ctx, t, ip, "manual", false)
 	if e != nil {
 		fail(w, 502, e.Error())
 		return
@@ -394,6 +396,8 @@ func (a *App) toggleTarget(w http.ResponseWriter, r *http.Request) {
 func (a *App) syncAll(w http.ResponseWriter, r *http.Request) {
 	a.mutate.Lock()
 	defer a.mutate.Unlock()
+	ctx, finishNotifications := a.beginNotificationRound(r.Context())
+	defer finishNotifications()
 	targets, e := a.store.targets()
 	if e != nil {
 		fail(w, 500, "读取目标失败")
@@ -405,12 +409,12 @@ func (a *App) syncAll(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := ""
 	if needsIP {
-		ip, _ = a.ipForSync(r.Context(), "manual")
+		ip, _ = a.ipForSync(ctx, "manual")
 	}
 	results := map[string]string{}
 	success := 0
 	for _, t := range targets {
-		if _, e := a.syncTarget(r.Context(), t, ip, "manual", false); e != nil {
+		if _, e := a.syncTarget(ctx, t, ip, "manual", false); e != nil {
 			results[t.ID] = e.Error()
 		} else {
 			success++

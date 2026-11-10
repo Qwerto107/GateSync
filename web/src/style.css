@@ -1471,6 +1471,156 @@ nav {
 .log-retention-card {
   margin-top: 24px;
 }
+.notification-channel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 20px;
+}
+.notification-channel {
+  padding: 22px;
+}
+.notification-channel-head,
+.notification-enable,
+.notification-template-header,
+.notification-channel-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.notification-channel-head > div {
+  min-width: 0;
+  flex: 1;
+}
+.notification-channel-head h2 {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  margin-bottom: 5px;
+}
+.notification-channel-head .muted,
+.notification-enable strong {
+  font-size: 11px;
+}
+.notification-event-tags,
+.notification-event-options {
+  display: flex;
+  gap: 8px 18px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+.notification-channel-actions {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+.notification-channel-actions .icon-btn {
+  margin-left: auto;
+}
+.notification-channel-actions .text-btn,
+.notification-template-header .text-btn {
+  font-size: 11px;
+}
+.notification-footnote {
+  margin-top: 18px;
+}
+.notification-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.notification-enable {
+  justify-content: space-between;
+}
+.notification-template-header {
+  flex-wrap: wrap;
+}
+.notification-template-header h3,
+.notification-preview h3 {
+  font-size: 13px;
+}
+.notification-template-header .custom-select {
+  width: 140px;
+  margin-left: auto;
+}
+.notification-template {
+  min-height: 240px;
+  line-height: 1.65;
+  resize: vertical;
+  font-size: 11px;
+  white-space: pre;
+}
+.notification-variables,
+.notification-preview details {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.notification-variables summary,
+.notification-preview summary {
+  cursor: pointer;
+}
+.notification-variables > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.notification-variables code {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.notification-preview pre {
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  font-size: 10px;
+  background: var(--surface-alt);
+}
+.feishu-card-preview {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.feishu-card-heading {
+  padding: 12px 14px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.feishu-card-preview.failed .feishu-card-heading {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+.feishu-card-preview.succeeded .feishu-card-heading {
+  background: var(--good-bg);
+  color: var(--good);
+}
+.feishu-card-content {
+  white-space: pre-wrap;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+.feishu-card-content > div + div {
+  margin-top: 14px;
+}
+.card-text-red {
+  color: var(--bad);
+}
+.card-text-green {
+  color: var(--good);
+}
+.card-text-grey {
+  color: var(--muted);
+}
+.notification-test-confirm {
+  flex-direction: column;
+  align-items: flex-start;
+}
 .retention-days {
   max-width: 460px;
 }
@@ -2363,6 +2513,8 @@ nav {
     background: var(--surface);
     padding: 0 24px;
     gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
   }
   .nav-item {
     padding: 9px 13px;

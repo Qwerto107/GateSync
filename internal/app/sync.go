@@ -97,20 +97,26 @@ func (a *App) detectIP(ctx context.Context, trigger string) (IPState, error) {
 			continue
 		}
 		state := IPState{IP: ip.String(), Source: source, CheckedAt: now()}
-		if e = a.store.setMeta("ip", state); e != nil {
-			return old, e
-		}
-		detail := "公网 IP 无变化：" + state.IP
-		if old.IP != state.IP {
-			detail = old.IP + " → " + state.IP
-		}
-		_ = a.store.addLog(LogEntry{Kind: "ip", Trigger: trigger, Object: "公网 IP", Detail: detail, Success: true})
-		return state, nil
+		return a.saveDetectedIP(ctx, old, state, trigger)
 	}
 	old.Error = "所有 IP 检测源均不可用，已保留旧 IP，暂停本次动态规则同步"
 	_ = a.store.setMeta("ip", old)
 	_ = a.store.addLog(LogEntry{Kind: "ip", Trigger: trigger, Object: "公网 IP", Detail: old.Error, Success: false})
 	return old, errors.New(old.Error)
+}
+func (a *App) saveDetectedIP(ctx context.Context, old, state IPState, trigger string) (IPState, error) {
+	if e := a.store.setMeta("ip", state); e != nil {
+		return old, e
+	}
+	detail := "公网 IP 无变化：" + state.IP
+	if old.IP != state.IP {
+		detail = old.IP + " → " + state.IP
+	}
+	_ = a.store.addLog(LogEntry{Kind: "ip", Trigger: trigger, Object: "公网 IP", Detail: detail, Success: true})
+	if old.IP != "" && old.IP != state.IP {
+		a.notify(ctx, notificationEvent{Kind: "ip_changed", OldIP: old.IP, NewIP: state.IP, Trigger: trigger, Time: state.CheckedAt})
+	}
+	return state, nil
 }
 func (a *App) cachedPublicIP() (string, error) {
 	var cached IPState
@@ -322,6 +328,8 @@ func reconcile(ctx context.Context, c Cloud, group, marker string, want, ledger 
 	return changes, nil
 }
 func (a *App) syncTarget(ctx context.Context, t Target, ip, trigger string, revoke bool) (result Target, err error) {
+	ctx, finishNotifications := a.beginNotificationRound(ctx)
+	defer finishNotifications()
 	result = t
 	object := t.GroupID
 	cidr := t.CurrentCIDR
@@ -362,6 +370,13 @@ func (a *App) syncTarget(ctx context.Context, t Target, ip, trigger string, revo
 		logErr := a.store.addLog(LogEntry{Kind: "sync", Trigger: trigger, Object: object, Detail: detail, Success: err == nil, Changes: changes})
 		if err == nil {
 			err = errors.Join(saveErr, logErr)
+		}
+		if !revoke && (err != nil || len(changes) > 0) {
+			event := notificationEvent{Kind: "sync_succeeded", OldIP: strings.TrimSuffix(t.CurrentCIDR, "/32"), NewIP: ip, TargetName: notificationTargetName(t), ResourceID: t.GroupID, Region: t.Region, Changes: changes, Trigger: trigger, Time: now()}
+			if err != nil {
+				event.Kind, event.Error = "sync_failed", err.Error()
+			}
+			a.notify(ctx, event)
 		}
 	}()
 	account, e := a.store.account(t.AccountID)
