@@ -497,7 +497,9 @@ export default function TargetModal({
               maxLength={100}
             />
             <span className="field-hint">
-              云端规则显示此备注并附加简短归属标记；过长内容会自动截短。
+              {accountProvider === "aws"
+                ? "AWS 云端备注仅保留支持的英文、数字及符号，并附加归属标记；中文保留在本地，过滤后为空则使用 GateSync。过长内容会截短。"
+                : "云端规则显示此备注并附加简短归属标记；过长内容会自动截短。"}
             </span>
           </label>
           {error && (

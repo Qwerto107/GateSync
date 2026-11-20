@@ -97,6 +97,8 @@ export default function Rules({
           <span className="provider-logo">T</span>腾讯云
           <span className="small-dot" />
           <span className="provider-logo">A</span>阿里云
+          <span className="small-dot" />
+          <span className="provider-logo">W</span>AWS
         </div>
       </div>
       <div className="ip-overview">
@@ -494,7 +496,7 @@ export default function Rules({
           />
         )}
         <div className="table-footer">
-          <span>腾讯云 / 阿里云 · IPv4 入站规则</span>
+          <span>腾讯云 / 阿里云 / AWS · IPv4 入站规则</span>
           <span>共 {targets.length} 个目标</span>
         </div>
       </section>

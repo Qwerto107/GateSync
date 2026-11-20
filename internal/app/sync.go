@@ -414,10 +414,14 @@ func (a *App) syncTarget(ctx context.Context, t Target, ip, trigger string, revo
 		return t, fmt.Errorf("公网 IP 不可用（未检测或检测失败），已保留旧规则；请重新检测或检查查询设置")
 	}
 	marker := shortMarker("gatesync:" + a.installation + ":" + t.ID)
+	description := cloudDescription(t.Note, marker)
+	if providerID(account.Provider) == "aws" {
+		description = awsDescription(t.Note, marker)
+	}
 	if !revoke {
 		for _, source := range t.desiredCIDRs(ip) {
 			for _, p := range t.Ports {
-				desired = append(desired, Rule{Protocol: p.Protocol, Port: p.Value, CIDR: source, Action: "ACCEPT", Description: cloudDescription(t.Note, marker)})
+				desired = append(desired, Rule{Protocol: p.Protocol, Port: p.Value, CIDR: source, Action: "ACCEPT", Description: description})
 			}
 		}
 	}

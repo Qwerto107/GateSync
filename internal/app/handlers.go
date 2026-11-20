@@ -125,7 +125,7 @@ func (a *App) resolveProvider(id, provider string) (string, error) {
 		provider = old
 	}
 	provider = providerID(provider)
-	if provider != "tencent" && provider != "aliyun" {
+	if provider != "tencent" && provider != "aliyun" && provider != "aws" {
 		return "", fmt.Errorf("不支持的云厂商")
 	}
 	return provider, nil

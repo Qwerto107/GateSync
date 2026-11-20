@@ -68,6 +68,7 @@ type App struct {
 	wake                chan struct{}
 	notificationSenders map[string]notificationSender
 	aliyun              func(Credentials, string, string) (Cloud, error)
+	aws                 func(Credentials, string) (Cloud, error)
 }
 
 func New(c Config) (*App, error) {
@@ -78,6 +79,7 @@ func New(c Config) (*App, error) {
 	a := &App{cfg: c, store: s, cloud: newTencent, lighthouse: newLighthouse, attempts: map[string]oauthAttempt{}, loginSlots: make(chan struct{}, 4), loginRates: map[string][]time.Time{}, wake: make(chan struct{}, 1)}
 	a.notificationSenders = map[string]notificationSender{"feishu": feishuSender{}}
 	a.aliyun = newAliyun
+	a.aws = newAWS
 	if e = a.initSystem(c); e != nil {
 		s.db.Close()
 		return nil, e

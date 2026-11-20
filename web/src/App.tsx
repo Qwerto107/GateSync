@@ -370,7 +370,7 @@ export default function App() {
             仅维护 GateSync 创建的规则
           </span>
           <span>
-            GateSync <span className="footer-dot">·</span> 腾讯云 / 阿里云{" "}
+            GateSync <span className="footer-dot">·</span> 腾讯云 / 阿里云 / AWS{" "}
             <span className="version">v0.1.2</span>
           </span>
         </footer>

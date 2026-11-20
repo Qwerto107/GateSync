@@ -69,7 +69,11 @@ export default function Accounts({
                     <td>
                       <div className="inline">
                         <span className="provider-logo small">
-                          {a.provider === "aliyun" ? "A" : "T"}
+                          {a.provider === "aws"
+                            ? "W"
+                            : a.provider === "aliyun"
+                              ? "A"
+                              : "T"}
                         </span>
                         {providerName(a.provider)}
                       </div>

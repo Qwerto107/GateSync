@@ -15,6 +15,8 @@ func validProviderResource(provider, kind string) bool {
 		return resourceType(kind) == "security-group" || kind == "lighthouse"
 	case "aliyun":
 		return resourceType(kind) == "security-group" || kind == "swas"
+	case "aws":
+		return resourceType(kind) == "security-group"
 	}
 	return false
 }
@@ -36,6 +38,9 @@ func (a *App) accountCloud(account Account, c Credentials, region, kind string) 
 	}
 	if providerID(account.Provider) == "aliyun" {
 		return a.aliyun(c, region, resourceType(kind))
+	}
+	if providerID(account.Provider) == "aws" {
+		return a.aws(c, region)
 	}
 	return a.cloudFor(c, region, kind)
 }

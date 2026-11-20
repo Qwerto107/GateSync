@@ -133,7 +133,9 @@ export default function AccountModal({
               options={resourceOptions(form.provider)}
             />
             <span className="field-hint">
-              用于连接测试；添加目标时仍可选择另一类型。
+              {form.provider === "aws"
+                ? "用于连接测试；当前支持 EC2 / VPC 安全组。"
+                : "用于连接测试；添加目标时仍可选择另一类型。"}
             </span>
           </label>
           <label className="field">
@@ -147,7 +149,11 @@ export default function AccountModal({
             />
           </label>
           <label className="field">
-            {form.provider === "aliyun" ? "AccessKey ID" : "SecretId"}
+            {form.provider === "aws"
+              ? "Access Key ID"
+              : form.provider === "aliyun"
+                ? "AccessKey ID"
+                : "SecretId"}
             <input
               className="mono"
               value={form.secretId}
@@ -155,9 +161,11 @@ export default function AccountModal({
               placeholder={
                 account
                   ? `${account.maskedKey}（留空不修改）`
-                  : form.provider === "aliyun"
-                    ? "LTAI…"
-                    : "AKID…"
+                  : form.provider === "aws"
+                    ? "AKIA…"
+                    : form.provider === "aliyun"
+                      ? "LTAI…"
+                      : "AKID…"
               }
               required={!account}
               maxLength={256}
@@ -165,7 +173,11 @@ export default function AccountModal({
             />
           </label>
           <label className="field">
-            {form.provider === "aliyun" ? "AccessKey Secret" : "SecretKey"}
+            {form.provider === "aws"
+              ? "Secret Access Key"
+              : form.provider === "aliyun"
+                ? "AccessKey Secret"
+                : "SecretKey"}
             <input
               type="password"
               value={form.secretKey}
@@ -195,8 +207,9 @@ export default function AccountModal({
           </button>
           <div className="notice info small-notice">
             <ShieldCheck size={17} />
-            建议使用专用子账号，仅授予资源读取和规则新增、备注更新、删除权限。阿里云使用
-            RAM 策略，腾讯云使用 CAM 策略。
+            {form.provider === "aws"
+              ? "使用专用 IAM 用户的长期访问密钥，仅授予 EC2 地域、安全组读取和入站规则新增、备注更新、删除权限。暂不支持 STS 临时凭证。中国区账号请先填写 cn-north-1 或 cn-northwest-1，再读取地域。"
+              : "建议使用专用子账号，仅授予资源读取和规则新增、备注更新、删除权限。阿里云使用 RAM 策略，腾讯云使用 CAM 策略。"}
           </div>
           {error && (
             <div className="notice danger" role="alert">
