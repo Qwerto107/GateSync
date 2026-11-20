@@ -31,6 +31,7 @@ func (a *App) state(w http.ResponseWriter, r *http.Request) {
 	var ip IPState
 	_ = a.store.getMeta("ip", &ip)
 	for i := range accounts {
+		accounts[i].Provider = providerID(accounts[i].Provider)
 		accounts[i].ResourceType = resourceType(accounts[i].ResourceType)
 		for _, t := range targets {
 			if t.AccountID == accounts[i].ID {
@@ -103,6 +104,7 @@ func (a *App) saveSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 type accountInput struct {
+	Provider     string `json:"provider"`
 	ResourceType string `json:"resourceType"`
 	Name         string `json:"name"`
 	Region       string `json:"region"`
@@ -110,8 +112,29 @@ type accountInput struct {
 	SecretKey    string `json:"secretKey"`
 }
 
+func (a *App) resolveProvider(id, provider string) (string, error) {
+	if id != "" {
+		account, err := a.store.account(id)
+		if err != nil {
+			return "", err
+		}
+		old := providerID(account.Provider)
+		if provider != "" && provider != old {
+			return "", fmt.Errorf("已有账号不能更换云厂商，请创建新账号")
+		}
+		provider = old
+	}
+	provider = providerID(provider)
+	if provider != "tencent" && provider != "aliyun" {
+		return "", fmt.Errorf("不支持的云厂商")
+	}
+	return provider, nil
+}
 func (a *App) resolveCredentials(id string, input accountInput) (Credentials, error) {
-	c := Credentials{strings.TrimSpace(input.SecretID), strings.TrimSpace(input.SecretKey)}
+	c := Credentials{SecretID: strings.TrimSpace(input.SecretID), SecretKey: strings.TrimSpace(input.SecretKey)}
+	if _, e := a.resolveProvider(id, input.Provider); e != nil {
+		return c, e
+	}
 	if id != "" {
 		old, e := a.store.credentials(id)
 		if e != nil {
@@ -125,7 +148,7 @@ func (a *App) resolveCredentials(id string, input accountInput) (Credentials, er
 		}
 	}
 	if c.SecretID == "" || c.SecretKey == "" || len(c.SecretID) > 256 || len(c.SecretKey) > 256 {
-		return c, fmt.Errorf("请填写有效的 SecretId 与 SecretKey")
+		return c, fmt.Errorf("请填写有效的访问密钥 ID 与 Secret")
 	}
 	return c, nil
 }
@@ -141,7 +164,13 @@ func (a *App) saveAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.Name = strings.TrimSpace(input.Name)
-	if input.Name == "" || len(input.Name) > 100 || !regionPattern.MatchString(input.Region) || !validResourceType(input.ResourceType) {
+	provider, providerErr := a.resolveProvider(r.PathValue("id"), input.Provider)
+	if providerErr != nil {
+		fail(w, 400, providerErr.Error())
+		return
+	}
+	input.Provider = provider
+	if input.Name == "" || len(input.Name) > 100 || !regionPattern.MatchString(input.Region) || !validProviderResource(input.Provider, input.ResourceType) {
 		fail(w, 400, "请填写账号名称与有效地域")
 		return
 	}
@@ -162,7 +191,7 @@ func (a *App) saveAccount(w http.ResponseWriter, r *http.Request) {
 	if id == "" {
 		id = randomID()
 	}
-	item := Account{ResourceType: resourceType(input.ResourceType), ID: id, Name: input.Name, Provider: "tencent", Region: input.Region, MaskedKey: masked(c.SecretID), Status: "untested"}
+	item := Account{ResourceType: resourceType(input.ResourceType), ID: id, Name: input.Name, Provider: input.Provider, Region: input.Region, MaskedKey: masked(c.SecretID), Status: "untested"}
 	if e = a.store.saveAccount(item, &c); e != nil {
 		fail(w, 500, "保存云账号失败")
 		return
@@ -178,7 +207,12 @@ func (a *App) testCredentials(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	if !regionPattern.MatchString(input.Region) || !validResourceType(input.ResourceType) {
+	provider, providerErr := a.resolveProvider(input.ID, input.Provider)
+	if providerErr != nil {
+		fail(w, 400, providerErr.Error())
+		return
+	}
+	if !regionPattern.MatchString(input.Region) || !validProviderResource(provider, input.ResourceType) {
 		fail(w, 400, "地域格式无效")
 		return
 	}
@@ -187,7 +221,7 @@ func (a *App) testCredentials(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, e.Error())
 		return
 	}
-	cloud, e := a.cloudFor(c, input.Region, input.ResourceType)
+	cloud, e := a.accountCloud(Account{Provider: provider}, c, input.Region, input.ResourceType)
 	if e != nil {
 		fail(w, 400, e.Error())
 		return
@@ -197,10 +231,7 @@ func (a *App) testCredentials(w http.ResponseWriter, r *http.Request) {
 		fail(w, 502, e.Error())
 		return
 	}
-	label := "安全组"
-	if resourceType(input.ResourceType) == "lighthouse" {
-		label = "Lighthouse 实例"
-	}
+	label := resourceLabel(input.ResourceType)
 	jsonResponse(w, 200, map[string]any{"count": len(groups), "message": fmt.Sprintf("连接成功，可见 %d 个%s；写入权限将在实际同步时验证", len(groups), label)})
 }
 func (a *App) testAccount(w http.ResponseWriter, r *http.Request) {
@@ -216,7 +247,7 @@ func (a *App) testAccount(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, e.Error())
 		return
 	}
-	cloud, e := a.cloudFor(c, item.Region, item.ResourceType)
+	cloud, e := a.accountCloud(item, c, item.Region, item.ResourceType)
 	if e != nil {
 		fail(w, 400, e.Error())
 		return
@@ -224,10 +255,7 @@ func (a *App) testAccount(w http.ResponseWriter, r *http.Request) {
 	groups, e := cloud.Groups(r.Context())
 	item.TestedAt = now()
 	item.Status = "connected"
-	label := "安全组"
-	if resourceType(item.ResourceType) == "lighthouse" {
-		label = "Lighthouse 实例"
-	}
+	label := resourceLabel(item.ResourceType)
 	detail := "连接正常，可见 " + strconv.Itoa(len(groups)) + " 个" + label + "（仅验证读取权限）"
 	if e != nil {
 		item.Status = "failed"
@@ -267,7 +295,7 @@ func (a *App) groups(w http.ResponseWriter, r *http.Request) {
 	if kind == "" {
 		kind = item.ResourceType
 	}
-	cloud, e := a.cloudFor(c, region, kind)
+	cloud, e := a.accountCloud(item, c, region, kind)
 	if e != nil {
 		fail(w, 400, e.Error())
 		return
@@ -304,8 +332,13 @@ func (a *App) saveTarget(w http.ResponseWriter, r *http.Request) {
 	}
 	a.mutate.Lock()
 	defer a.mutate.Unlock()
-	if _, e := a.store.account(t.AccountID); e != nil {
+	account, accountErr := a.store.account(t.AccountID)
+	if accountErr != nil {
 		fail(w, 400, "云账号不存在")
+		return
+	}
+	if !validProviderResource(account.Provider, t.ResourceType) {
+		fail(w, 400, "云厂商不支持此目标类型")
 		return
 	}
 	id := r.PathValue("id")

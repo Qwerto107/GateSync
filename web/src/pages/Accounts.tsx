@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Account, date, State } from "../api";
 import { Spin, Badge, Empty } from "../components/ui";
+import { providerName } from "../providers";
 
 export default function Accounts({
   state,
@@ -52,7 +53,7 @@ export default function Accounts({
                 <tr>
                   <th>账号名称</th>
                   <th>云厂商</th>
-                  <th>SecretId</th>
+                  <th>访问密钥 ID</th>
                   <th>默认地域</th>
                   <th>放行目标</th>
                   <th>连接状态</th>
@@ -67,7 +68,10 @@ export default function Accounts({
                     </td>
                     <td>
                       <div className="inline">
-                        <span className="provider-logo small">T</span>腾讯云
+                        <span className="provider-logo small">
+                          {a.provider === "aliyun" ? "A" : "T"}
+                        </span>
+                        {providerName(a.provider)}
                       </div>
                     </td>
                     <td className="mono">{a.maskedKey}</td>

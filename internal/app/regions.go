@@ -17,6 +17,20 @@ type Region struct {
 	Name string `json:"name"`
 }
 
+func providerRegions(ctx context.Context, c Credentials, provider, kind string) ([]Region, error) {
+	if !validProviderResource(provider, kind) {
+		return nil, fmt.Errorf("云厂商不支持此目标类型")
+	}
+	if providerID(provider) == "aliyun" {
+		cloud, e := newAliyun(c, "cn-hangzhou", resourceType(kind))
+		if e != nil {
+			return nil, e
+		}
+		return cloud.(*Aliyun).Regions(ctx)
+	}
+	return cloudRegions(ctx, c, kind)
+}
+
 func cloudRegions(ctx context.Context, c Credentials, kind string) ([]Region, error) {
 	if !validResourceType(kind) {
 		return nil, fmt.Errorf("不支持的目标类型")
@@ -72,7 +86,7 @@ func (a *App) regions(w http.ResponseWriter, r *http.Request) {
 	if kind == "" {
 		kind = account.ResourceType
 	}
-	out, e := cloudRegions(r.Context(), c, kind)
+	out, e := providerRegions(r.Context(), c, account.Provider, kind)
 	if e != nil {
 		fail(w, 502, e.Error())
 		return
@@ -92,7 +106,12 @@ func (a *App) formRegions(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, e.Error())
 		return
 	}
-	out, e := cloudRegions(r.Context(), c, input.ResourceType)
+	provider, e := a.resolveProvider(input.ID, input.Provider)
+	if e != nil {
+		fail(w, 400, e.Error())
+		return
+	}
+	out, e := providerRegions(r.Context(), c, provider, input.ResourceType)
 	if e != nil {
 		fail(w, 502, e.Error())
 		return

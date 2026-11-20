@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { api, Port, State, Target, Region, FixedIP } from "../api";
 import { Spin, Modal, RegionField, Select } from "./ui";
+import { providerName, resourceOptions } from "../providers";
 
 export default function TargetModal({
   target,
@@ -55,7 +56,15 @@ export default function TargetModal({
   const [regionOptions, setRegionOptions] = useState<Region[]>([]);
   const [regionError, setRegionError] = useState("");
   const isLighthouse = form.resourceType === "lighthouse";
-  const resourceLabel = isLighthouse ? "Lighthouse 实例" : "安全组";
+  const isSwas = form.resourceType === "swas";
+  const accountProvider = state.accounts.find(
+    (a) => a.id === form.accountId,
+  )?.provider;
+  const resourceLabel = isLighthouse
+    ? "Lighthouse 实例"
+    : isSwas
+      ? "轻量应用服务器实例"
+      : "安全组";
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [groupsError, setGroupsError] = useState("");
   const [loadingGroups, setLoadingGroups] = useState(false);
@@ -169,7 +178,7 @@ export default function TargetModal({
   return (
     <Modal
       title={target ? "编辑放行目标" : "添加放行目标"}
-      subtitle="选择安全组或 Lighthouse 实例，设置需要放行的端口"
+      subtitle="选择云厂商资源，设置需要放行的端口"
       onClose={onClose}
       wide
       busy={busy}
@@ -191,10 +200,7 @@ export default function TargetModal({
               label="目标类型"
               value={form.resourceType}
               disabled={!!target}
-              options={[
-                { value: "security-group", label: "VPC 安全组" },
-                { value: "lighthouse", label: "Lighthouse 防火墙" },
-              ]}
+              options={resourceOptions(accountProvider)}
               onChange={(value) =>
                 setForm({
                   ...form,
@@ -216,7 +222,7 @@ export default function TargetModal({
                 searchable
                 options={state.accounts.map((a) => ({
                   value: a.id,
-                  label: a.name,
+                  label: `${a.name}（${providerName(a.provider)}）`,
                 }))}
                 onChange={(value) => {
                   const a = state.accounts.find((v) => v.id === value)!;
@@ -249,7 +255,13 @@ export default function TargetModal({
               <input
                 className="mono"
                 value={form.groupId}
-                placeholder={isLighthouse ? "lhins-xxxxxxxx" : "sg-xxxxxxxx"}
+                placeholder={
+                  isLighthouse
+                    ? "lhins-xxxxxxxx"
+                    : isSwas
+                      ? "32 位实例 ID"
+                      : "sg-xxxxxxxx"
+                }
                 disabled={!!target}
                 required
                 onChange={(e) =>

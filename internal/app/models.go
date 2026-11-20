@@ -129,7 +129,8 @@ type Group struct {
 
 var groupPattern = regexp.MustCompile(`^sg-[a-zA-Z0-9]+$`)
 var instancePattern = regexp.MustCompile(`^lhins-[a-zA-Z0-9]+$`)
-var regionPattern = regexp.MustCompile(`^[a-z]+-[a-z]+(?:-[a-z]+)?$`)
+var swasInstancePattern = regexp.MustCompile(`^[a-fA-F0-9]{32}$`)
+var regionPattern = regexp.MustCompile(`^[a-z]+-[a-z0-9]+(?:-[a-z0-9]+){0,2}$`)
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
 func normalizeCIDR(s string) (string, error) {
@@ -158,9 +159,9 @@ func validateTarget(t *Target) error {
 	if t.ResourceType == "" {
 		t.ResourceType = "security-group"
 	}
-	validResource := t.ResourceType == "security-group" && groupPattern.MatchString(t.GroupID) || t.ResourceType == "lighthouse" && instancePattern.MatchString(t.GroupID)
+	validResource := t.ResourceType == "security-group" && groupPattern.MatchString(t.GroupID) || t.ResourceType == "lighthouse" && instancePattern.MatchString(t.GroupID) || t.ResourceType == "swas" && swasInstancePattern.MatchString(t.GroupID)
 	if t.AccountID == "" || !regionPattern.MatchString(t.Region) || !validResource {
-		return fmt.Errorf("请选择云账号、有效地域与安全组或 Lighthouse 实例")
+		return fmt.Errorf("请选择云账号、有效地域与安全组或轻量服务器实例")
 	}
 	if len(t.Note) > 300 || len(t.GroupName) > 200 {
 		return fmt.Errorf("备注或安全组名称过长")
@@ -204,6 +205,9 @@ func validateTarget(t *Target) error {
 	}
 	if count*len(t.Ports) > 100 {
 		return fmt.Errorf("IP 来源与端口组合最多 100 条，请减少 IP 或端口")
+	}
+	if t.ResourceType == "swas" && count*len(t.Ports) > 50 {
+		return fmt.Errorf("阿里云轻量服务器的 IP 来源与端口组合最多 50 条，请减少 IP 或端口")
 	}
 	seen := map[string]bool{}
 	for i, p := range t.Ports {

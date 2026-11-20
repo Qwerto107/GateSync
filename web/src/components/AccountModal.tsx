@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Account, api, Region } from "../api";
 import { Spin, Modal, RegionField, Select } from "./ui";
+import { defaultRegion, providers, resourceOptions } from "../providers";
 
 export default function AccountModal({
   account,
@@ -20,9 +21,10 @@ export default function AccountModal({
   onSaved: () => Promise<void>;
 }) {
   const [form, setForm] = useState({
+    provider: account?.provider || "tencent",
     resourceType: account?.resourceType || "security-group",
     name: account?.name || "",
-    region: account?.region || "ap-guangzhou",
+    region: account?.region || defaultRegion(account?.provider),
     secretId: "",
     secretKey: "",
   });
@@ -99,11 +101,25 @@ export default function AccountModal({
         <fieldset disabled={!!busy} className="modal-body">
           <label className="field">
             云厂商
-            <div className="provider-field">
-              <span className="provider-logo">T</span>
-              <strong>腾讯云</strong>
-              <span className="badge good">已支持</span>
-            </div>
+            <Select
+              label="云厂商"
+              value={form.provider}
+              options={providers}
+              disabled={!!account}
+              onChange={(provider) => {
+                setForm((f) => ({
+                  ...f,
+                  provider,
+                  resourceType: "security-group",
+                  region: defaultRegion(provider),
+                  secretId: "",
+                  secretKey: "",
+                }));
+                setRegionOptions([]);
+                setError("");
+                setTest("");
+              }}
+            />
           </label>
           <label className="field">
             默认目标类型
@@ -114,10 +130,7 @@ export default function AccountModal({
                 update("resourceType", value);
                 setRegionOptions([]);
               }}
-              options={[
-                { value: "security-group", label: "VPC 安全组" },
-                { value: "lighthouse", label: "Lighthouse 防火墙" },
-              ]}
+              options={resourceOptions(form.provider)}
             />
             <span className="field-hint">
               用于连接测试；添加目标时仍可选择另一类型。
@@ -134,13 +147,17 @@ export default function AccountModal({
             />
           </label>
           <label className="field">
-            SecretId
+            {form.provider === "aliyun" ? "AccessKey ID" : "SecretId"}
             <input
               className="mono"
               value={form.secretId}
               onChange={(e) => update("secretId", e.target.value)}
               placeholder={
-                account ? `${account.maskedKey}（留空不修改）` : "AKID…"
+                account
+                  ? `${account.maskedKey}（留空不修改）`
+                  : form.provider === "aliyun"
+                    ? "LTAI…"
+                    : "AKID…"
               }
               required={!account}
               maxLength={256}
@@ -148,12 +165,12 @@ export default function AccountModal({
             />
           </label>
           <label className="field">
-            SecretKey
+            {form.provider === "aliyun" ? "AccessKey Secret" : "SecretKey"}
             <input
               type="password"
               value={form.secretKey}
               onChange={(e) => update("secretKey", e.target.value)}
-              placeholder={account ? "留空表示不修改" : "请输入 SecretKey"}
+              placeholder={account ? "留空表示不修改" : "请输入访问密钥 Secret"}
               required={!account}
               maxLength={256}
               autoComplete="new-password"
@@ -178,7 +195,8 @@ export default function AccountModal({
           </button>
           <div className="notice info small-notice">
             <ShieldCheck size={17} />
-            建议使用仅授予所需资源读取和规则新增、删除权限的子账号。
+            建议使用专用子账号，仅授予资源读取和规则新增、备注更新、删除权限。阿里云使用
+            RAM 策略，腾讯云使用 CAM 策略。
           </div>
           {error && (
             <div className="notice danger" role="alert">

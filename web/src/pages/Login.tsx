@@ -78,7 +78,7 @@ export default function Login({ onLogin }: { onLogin: () => Promise<void> }) {
             </div>
             <div className="connection-node cloud-node">
               <Cloud size={26} />
-              <span>腾讯云安全组</span>
+              <span>云安全组 / 防火墙</span>
             </div>
           </div>
           <div className="story-note">

@@ -179,13 +179,14 @@ func matchesMarker(description, marker string) bool {
 }
 func ledgerKey(r Rule) string { return ruleKey(r) + "|" + r.Description }
 func ownedRules(rules, ledger []Rule, marker string) []Rule {
-	known := map[string]bool{}
+	known := map[string]Rule{}
 	for _, r := range ledger {
-		known[ledgerKey(r)] = true
+		known[ledgerKey(r)] = r
 	}
 	out := []Rule{}
 	for _, r := range rules {
-		if matchesMarker(r.Description, marker) && known[ledgerKey(r)] && strings.EqualFold(r.Action, "ACCEPT") {
+		tracked, ok := known[ledgerKey(r)]
+		if matchesMarker(r.Description, marker) && ok && (tracked.ID == "" || tracked.ID == r.ID) && strings.EqualFold(r.Action, "ACCEPT") {
 			out = append(out, r)
 		}
 	}
@@ -303,6 +304,14 @@ func reconcile(ctx context.Context, c Cloud, group, marker string, want, ledger 
 		// 动态 IP 未知时仅补充固定规则，推迟清理，避免把旧动态授权当成过期规则删除。
 		next := append([]Rule{}, want...)
 		next = append(next, stale...)
+		for i := range next {
+			for _, actual := range current {
+				if ledgerKey(next[i]) == ledgerKey(actual) {
+					next[i].ID = actual.ID
+					break
+				}
+			}
+		}
 		return changes, saveLedger(next)
 	}
 	if len(stale) > 0 {
@@ -319,6 +328,15 @@ func reconcile(ctx context.Context, c Cloud, group, marker string, want, ledger 
 		for _, r := range ownedRules(set.Rules, ledger, marker) {
 			if !desired[ruleKey(r)] {
 				return changes, fmt.Errorf("旧规则撤销尚未确认，请重试")
+			}
+		}
+	}
+	// 支持稳定规则 ID 的厂商在核验后绑定台账，后续不能接管同值的新规则。
+	for i := range want {
+		for _, actual := range ownedRules(set.Rules, ledger, marker) {
+			if ledgerKey(want[i]) == ledgerKey(actual) {
+				want[i].ID = actual.ID
+				break
 			}
 		}
 	}
@@ -388,7 +406,7 @@ func (a *App) syncTarget(ctx context.Context, t Target, ip, trigger string, revo
 	if e != nil {
 		return t, e
 	}
-	c, e := a.cloudFor(credentials, t.Region, t.ResourceType)
+	c, e := a.accountCloud(account, credentials, t.Region, t.ResourceType)
 	if e != nil {
 		return t, e
 	}

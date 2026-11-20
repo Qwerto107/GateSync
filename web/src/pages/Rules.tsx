@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { date, State, Target } from "../api";
 import { Spin, Badge, Empty, Toggle } from "../components/ui";
+import { resourceName } from "../providers";
 
 export default function Rules({
   state,
@@ -93,9 +94,9 @@ export default function Rules({
           <p>连接随 IP 而变，让放行规则保持最新。</p>
         </div>
         <div className="page-caption">
-          <span className="provider-logo">T</span>腾讯云已接入
+          <span className="provider-logo">T</span>腾讯云
           <span className="small-dot" />
-          更多云厂商即将支持
+          <span className="provider-logo">A</span>阿里云
         </div>
       </div>
       <div className="ip-overview">
@@ -339,7 +340,7 @@ export default function Rules({
                         <strong>{t.name || t.groupName || t.groupId}</strong>
                         <small
                           className="resource-detail"
-                          title={`${t.groupName || t.groupId} · ${t.groupId} · ${t.resourceType === "lighthouse" ? "Lighthouse 防火墙" : "VPC 安全组"}`}
+                          title={`${t.groupName || t.groupId} · ${t.groupId} · ${resourceName(state.accounts.find((a) => a.id === t.accountId)?.provider, t.resourceType)}`}
                         >
                           {t.name && t.groupName && (
                             <span>{t.groupName} · </span>
@@ -480,7 +481,7 @@ export default function Rules({
             text={
               search || filter !== "all"
                 ? "试试调整搜索内容或筛选条件。"
-                : "选择安全组或 Lighthouse 实例，配置需要放行的端口。"
+                : "选择安全组或轻量服务器实例，配置需要放行的端口。"
             }
             action={
               !search && filter === "all" ? (
@@ -493,9 +494,7 @@ export default function Rules({
           />
         )}
         <div className="table-footer">
-          <span>
-            <span className="provider-logo tiny">T</span>腾讯云 · IPv4 入站规则
-          </span>
+          <span>腾讯云 / 阿里云 · IPv4 入站规则</span>
           <span>共 {targets.length} 个目标</span>
         </div>
       </section>

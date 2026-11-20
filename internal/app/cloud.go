@@ -13,13 +13,14 @@ import (
 type Rule struct {
 	Index                                     int64
 	Protocol, Port, CIDR, Action, Description string
+	ID                                        string `json:",omitempty"`
 }
 type RuleSet struct {
 	Version string
 	Rules   []Rule
 }
 
-// 云厂商差异集中在此接口，业务层不依赖腾讯云的数据结构。
+// 云厂商差异集中在此接口，业务层不依赖厂商 SDK 的数据结构。
 type Cloud interface {
 	Groups(context.Context) ([]Group, error)
 	Rules(context.Context, string) (RuleSet, error)
@@ -74,7 +75,7 @@ func (c *Tencent) Rules(ctx context.Context, id string) (RuleSet, error) {
 	}
 	out := RuleSet{Version: value(p.Version)}
 	for _, p := range p.Ingress {
-		out.Rules = append(out.Rules, Rule{value(p.PolicyIndex), value(p.Protocol), value(p.Port), value(p.CidrBlock), value(p.Action), value(p.PolicyDescription)})
+		out.Rules = append(out.Rules, Rule{Index: value(p.PolicyIndex), Protocol: value(p.Protocol), Port: value(p.Port), CIDR: value(p.CidrBlock), Action: value(p.Action), Description: value(p.PolicyDescription)})
 	}
 	return out, nil
 }
