@@ -10,7 +10,7 @@
 
 ```text
 cmd/gatesync/          服务入口、退出处理与健康检查命令
-internal/app/          认证、配置、SQLite、HTTP、调度和腾讯云适配
+internal/app/          认证、配置、SQLite、HTTP、调度和云厂商适配
 internal/webui/        按构建标签提供内嵌页面或本地目录
 web/src/pages/        登录与四个主页面
 web/src/components/   共享界面、账号和目标表单
@@ -97,7 +97,8 @@ npm --prefix web run build
 
 - SQLite 使用 WAL 与单连接；账号、目标和计划相关写操作通过应用锁串行化。
 - SecretId / SecretKey 由后端使用 AES-256-GCM 加密，随机 nonce，并以账号 ID 绑定密文。
-- 云厂商差异通过 `Cloud` 接口集中在适配器，腾讯云包含安全组与 Lighthouse 两种实现。
+- 云厂商差异通过 `Cloud` 接口集中在适配器，腾讯云支持 VPC 安全组和 Lighthouse，阿里云支持 ECS 安全组和轻量应用服务器。阿里云使用官方通用 OpenAPI SDK，稳定规则 ID 在核验后写入台账，修改前重新检查完整规则快照。
+- AWS 适配器使用官方 AWS SDK for Go v2，显式传入加密保存的凭证与地域，不读取环境凭证链。EC2 使用稳定规则 ID 和写前快照检查；备注只更新入站描述，不重写匹配条件，中文备注仅保留在本地。
 - 系统登录配置加密存入 SQLite；环境变量只在系统设置尚不存在时导入，后台修改不会被启动值覆盖。
 - 创建前保存本地台账；新规则重新核验后才删除旧规则；删除同时检查随机归属备注、本地台账、规则版本和索引。
 - 目标归属不可原地更换。部分撤销失败后，已撤销目标关闭自动同步。

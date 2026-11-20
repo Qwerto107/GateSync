@@ -27,7 +27,7 @@ POST / PUT / PATCH / DELETE 请求必须设置 `X-GateSync-Request: 1`；JSON �
 | 409 | 排序请求与当前目标列表不一致 |
 | 429 | 密码登录或 OAuth 请求过于频繁 |
 | 500 | 本地存储或内部操作失败 |
-| 502 | 检测源或腾讯云操作失败 |
+| 502 | 检测源或云厂商操作失败 |
 
 腾讯云错误包含脱敏错误码、调用接口和有效 RequestId。权限错误优先显示服务端明确返回的“被拒绝的权限”；未返回具体 action 时，仅显示对应接口的“建议检查权限”，不代表已经确认缺少该授权。应同时核对策略关联、资源范围和显式拒绝条件。原始消息及其中账号、资源或请求参数不回显。不得在客户端日志中记录真实凭证或 Cookie。
 
@@ -130,6 +130,7 @@ googleClientSecret 留空保留原密钥；newPassword 留空保留原密码，�
 ```json
 {
   "name": "腾讯云 · 办公室",
+  "provider": "tencent",
   "resourceType": "security-group",
   "region": "ap-guangzhou",
   "secretId": "你的 SecretId",
@@ -139,11 +140,15 @@ googleClientSecret 留空保留原密钥；newPassword 留空保留原密码，�
 
 编辑时 secretId 或 secretKey 留空表示保留对应原值。表单测试使用相同字段，并额外传入 `id`；新账号的 id 为空，已有账号可据此复用未修改的密钥。仅验证读取权限，不写入测试规则。
 
+provider 支持 tencent / aliyun / aws，旧请求及旧账号缺省兼容 tencent。已有账号不能更换厂商，编辑请求省略 provider 时沿用原值。阿里云沿用 secretId / secretKey 字段分别传入 AccessKey ID / AccessKey Secret；resourceType 支持 security-group（ECS）或 swas（轻量服务器），腾讯云支持 security-group / lighthouse。AWS 同样沿用 secretId / secretKey，分别为长期 Access Key ID / Secret Access Key，只支持 security-group（EC2 / VPC），暂不支持 Session Token。不同厂商的资源类型不可混用。阿里云地域支持 cn-hangzhou、ap-southeast-1 等代码，轻量服务器 groupId 为 32 位实例 ID。账号表单测试、地域查询均接受 provider；已保存账号的查询以该账号厂商为准。权限策略见 [RAM 授权](ram.md) 和 [IAM 授权](iam.md)。
+
 name 为可选目标名称，去除首尾空白后最多 60 个字符，旧目标可不提供，仅用于后台展示，不替代云端备注。
 
-resourceType 为 security-group 或 lighthouse，省略默认为 security-group；同一账号可创建两类目标。账号对象字段为 id、name、provider、resourceType、region、maskedKey、status、testedAt、targetCount；当前 provider 为 tencent。
+resourceType 取值由 provider 决定：tencent 支持 security-group / lighthouse，aliyun 支持 security-group / swas，aws 只支持 security-group；省略默认 security-group。账号对象字段为 id、name、provider、resourceType、region、maskedKey、status、testedAt、targetCount。
 
-地域接口返回 `[{"id":"ap-guangzhou","name":"华南地区(广州)"}]`，只保留对应服务 AVAILABLE 的地域。安全组通过 CVM 查询，Lighthouse 使用自身地域接口；调用失败返回错误，前端可手动填写地域。资源对象字段为 id、name、description：安全组 ID 为 sg- 开头，Lighthouse 实例 ID 为 lhins- 开头。连接测试及列表接口只读取，不创建测试规则；权限 JSON 见 [CAM 授权](cam.md)。
+AWS 地域查询以表单或账号的 region 选择站点，表单缺省 us-east-1；中国区使用 cn-north-1 / cn-northwest-1。返回账号已启用的地域，name 与 id 均为地域代码。安全组和规则查询处理分页；错误返回脱敏码、接口及建议检查的 IAM action，不回显原始授权消息。AWS 本地中文备注保留，生成云端规则时过滤不支持的字符，完整保留工具归属标记；过滤后为空使用 GateSync。
+
+地域接口返回 `[{"id":"ap-guangzhou","name":"华南地区(广州)"}]`。腾讯云只保留对应服务 AVAILABLE 的地域。安全组通过 CVM 查询，Lighthouse 使用自身地域接口；调用失败返回错误，前端可手动填写地域。资源对象字段为 id、name、description：安全组 ID 为 sg- 开头，Lighthouse 实例 ID 为 lhins- 开头。连接测试及列表接口只读取，不创建测试规则；权限 JSON 见 [CAM 授权](cam.md)。
 
 删除的 revoke 默认为 false；显式 true 才撤销本工具创建的云规则。撤销未全部成功时返回错误并保留本地记录。
 
@@ -180,7 +185,7 @@ resourceType 为 security-group 或 lighthouse，省略默认为 security-group�
 }
 ```
 
-resourceType 为 security-group 或 lighthouse，默认 security-group；groupId / groupName 兼作 Lighthouse 的实例 ID / 名称，后者须使用 lhins- 开头的 ID。ipMode 为 dynamic 或 fixed，分别表示是否包含自动公网 IP；两者均可配置 fixedIps。fixedIps 为自定义 IPv4 / CIDR 对象数组，最多 20 项，name 可选、最多 90 字节；地址规范化后去重。fixed 模式至少提供一项，dynamic 可传空数组。所有来源共用 ports，来源与端口组合最多 100 条。旧 fixedCidr 字段仅在 fixedIps 缺省且模式为 fixed 时导入；显式空数组不会重新导入旧值。ports 为 1–50 项，protocol 为 TCP / UDP，value 为单端口或范围，范围为 1–65535。已有目标不可修改 resourceType、accountId、region 或 groupId。
+resourceType 为 security-group、lighthouse 或 swas，受账号厂商约束，默认 security-group；groupId / groupName 兼作轻量服务器实例 ID / 名称。Lighthouse 使用 lhins- 开头的 ID，阿里云轻量服务器使用 32 位实例 ID。ipMode 为 dynamic 或 fixed，分别表示是否包含自动公网 IP；两者均可配置 fixedIps。fixedIps 为自定义 IPv4 / CIDR 对象数组，最多 20 项，name 可选、最多 90 字节；地址规范化后去重。fixed 模式至少提供一项，dynamic 可传空数组。所有来源共用 ports，来源与端口组合最多 100 条，swas 最多 50 条。旧 fixedCidr 字段仅在 fixedIps 缺省且模式为 fixed 时导入；显式空数组不会重新导入旧值。ports 为 1–50 项，protocol 为 TCP / UDP，value 为单端口或范围，范围为 1–65535。已有目标不可修改 resourceType、accountId、region 或 groupId。
 
 排序请求为 `{"ids":["目标 ID 2","目标 ID 1"]}`，必须包含当前全部目标 ID 且无重复。成功返回 `{"ok":true}`，GET /state 的 targets 按保存顺序返回；旧目标默认按创建顺序，新目标追加末尾。成员已变化或无效时返回 409，原顺序保留，客户端应刷新列表后重试。该接口不更改目标配置或调用云 API。
 

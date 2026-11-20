@@ -11,6 +11,8 @@
 | 配置飞书机器人与自定义卡片模板 | [通知渠道](notifications.md) |
 | 通过脚本调用接口 | [API 参考](api.md) |
 | 复制安全组或 Lighthouse 的 CAM 策略 | [CAM 授权](cam.md) |
+| 复制阿里云 ECS 或轻量服务器的 RAM 策略 | [RAM 授权](ram.md) |
+| 配置 AWS 账号与 EC2 安全组权限 | [IAM 授权](iam.md) |
 | 查看版本变化 | [更新记录](changelog.md) |
 
 ## 部署
