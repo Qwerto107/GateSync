@@ -6,7 +6,7 @@
 
 ## 环境与结构
 
-使用 Go 1.26（工具链为 `go.mod` 中的 Go 1.26.10）、Node.js 24 和 npm。SQLite 使用纯 Go 驱动，发行构建关闭 CGO；依赖由 `go.sum` 和 `web/package-lock.json` 固定。
+使用 Go 1.26（工具链为 `go.mod` 中的 Go 1.26.11）、Node.js 24 和 npm。SQLite 使用纯 Go 驱动，发行构建关闭 CGO；依赖由 `go.sum` 和 `web/package-lock.json` 固定。
 
 ```text
 cmd/gatesync/          服务入口、退出处理与健康检查命令

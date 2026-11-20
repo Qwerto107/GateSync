@@ -2,7 +2,7 @@ module gatesync
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.2.5

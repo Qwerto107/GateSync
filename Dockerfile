@@ -9,7 +9,7 @@ WORKDIR /src
 COPY scripts/ ./scripts/
 RUN node scripts/prepare-webui.mjs
 
-FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS backend
+FROM --platform=$BUILDPLATFORM golang:1.26.11-alpine AS backend
 WORKDIR /src
 ENV CGO_ENABLED=0
 COPY go.mod go.sum ./
